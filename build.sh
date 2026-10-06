@@ -45,9 +45,9 @@
 #
 # Knobs (environment):
 #   SUITE          debootstrap suite            (default: resolute = 26.04)
-#   MIRROR         apt mirror, arm64 ports      (default: TUNA ubuntu-ports
-#                  mirror; http on purpose -- no CA dependency inside the
-#                  chroot, apt authenticates packages by signature anyway)
+#   MIRROR         apt mirror, arm64 ports      (default: the official
+#                  ports.ubuntu.com; point MIRROR=... at a local mirror for
+#                  faster builds, e.g. mirrors.tuna.tsinghua.edu.cn)
 #   ROOTFS_SIZE    size argument for mkfs.ext4  (default: 2g, or the largest
 #                  ROOTFS_SIZE declared by a selected presets/<p>/image.conf;
 #                  an explicit ROOTFS_SIZE here wins)
@@ -61,7 +61,7 @@ SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 META="${SCRIPTDIR}"
 OUT="${OUT:-${SCRIPTDIR}/../../build}"
 SUITE="${SUITE:-resolute}"
-MIRROR="${MIRROR:-http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports}"
+MIRROR="${MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
 ROOTFS_SIZE="${ROOTFS_SIZE:-}"
 ROOTFS_LABEL="${ROOTFS_LABEL:-rootfs}"
 
