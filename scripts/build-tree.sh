@@ -216,6 +216,25 @@ Suites: ${SUITE}-security
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 APTSRC
+# power button: short press suspends (s2idle), long press powers off --
+# the stock logind default is an instant poweroff on short press
+mkdir -p "${TREE}/etc/systemd/logind.conf.d"
+cat > "${TREE}/etc/systemd/logind.conf.d/50-power-button.conf" <<LOGIND
+[Login]
+HandlePowerKey=suspend
+HandlePowerKeyLongPress=poweroff
+HandleSuspendKey=suspend
+HandleHibernateKey=ignore
+LOGIND
+# inside GNOME sessions make the button suspend directly too (stock
+# default is a 60s interactive dialog); takes effect after `dconf update`
+# which runs on first boot via the dconf service
+mkdir -p "${TREE}/etc/dconf/profile" "${TREE}/etc/dconf/db/local.d"
+printf 'user-db:user\nsystem-db:local\n' > "${TREE}/etc/dconf/profile/user"
+cat > "${TREE}/etc/dconf/db/local.d/00-power" <<DCONF
+[org/gnome/settings-daemon/plugins/power]
+power-button-action='suspend'
+DCONF
 # empty machine-id (re-created on first boot), headless default target,
 # well-known mountpoint dirs, no variable leftovers inside the tree.
 # NOTE: the apt caches are bind mounts -- do NOT clean them here (that
@@ -239,6 +258,9 @@ for p in ${PRESENTS:-}; do
         rm -f "${TREE}/tmp/hook.sh"
     fi
 done
+
+# compile the dconf system database (only exists on desktop variants)
+[ -x "${TREE}/usr/bin/dconf" ] && chroot_run dconf update || true
 
 # ---- no kernel by design --------------------------------------------------------
 BAD="$(chroot_run dpkg-query -W -f="\${binary:Package}\n" 2>/dev/null \
