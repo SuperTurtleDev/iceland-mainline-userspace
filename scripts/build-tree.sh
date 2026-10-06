@@ -187,13 +187,12 @@ cat > "${TREE}/etc/fstab" <<FSTAB
 # <device> <mount> <type> <options> <dump> <pass>
 /dev/root  /       auto   rw        0       1
 FSTAB
-# power: deep sleep does not survive this platform's warm boot (the
-# bootloader comes back with a different memory mapping, so resuming from
-# deep power collapse is impossible). Force s2idle and mask the
-# hibernate-family units; plain suspend (s2idle) stays available.
-printf 'W /sys/power/mem_sleep - - - - s2idle\n' \
-    > "${TREE}/usr/lib/tmpfiles.d/mem-sleep.conf"
-for u in systemd-hibernate.service systemd-suspend-then-hibernate.service \
+# power: NOTHING may suspend on this platform -- s2idle does not resume
+# either (a suspend is effectively a poweroff), so mask the whole sleep
+# family. The power key locks the screen instead (see the logind drop-in
+# below); long-press poweroff stays available.
+for u in systemd-suspend.service suspend.target \
+         systemd-hibernate.service systemd-suspend-then-hibernate.service \
          systemd-hybrid-sleep.service; do
     ln -sfn /dev/null "${TREE}/etc/systemd/system/${u}"
 done
