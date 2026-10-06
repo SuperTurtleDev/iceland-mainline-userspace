@@ -1,0 +1,15 @@
+Package: fastcharge
+Version: 1.0
+Section: admin
+Priority: optional
+Architecture: arm64
+Maintainer: mainline sm8850 build <root@localhost>
+Depends: kmod, libc6 (>= 2.39)
+Description: profile-driven USB PD fast-charge service for SM8850 (iceland)
+ fastcharged watches the battery (SoC, temperature) and drives the
+ charge_boost_lite kernel module (shipped by the kernel
+ build, not this package) to request fixed
+ USB-PD PDOs with a per-situation input current limit, following the
+ profile in /etc/fastcharge/fastcharge.conf. Hard caps: 12 V / 3 A; the
+ profile must cover the whole SoC x temperature domain or the daemon
+ refuses to boost.

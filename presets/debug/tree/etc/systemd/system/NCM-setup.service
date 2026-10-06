@@ -1,0 +1,26 @@
+[Unit]
+Description=USB NCM gadget network interface (debug preset)
+Documentation=file:/usr/local/sbin/ncm-setup
+# Started two ways:
+#   * multi-user.target.wants  -- static start right after basic.target
+#   * /etc/udev/rules.d/90-ncm-udc.rules -- SYSTEMD_WANTS on "udc" add
+# The dwc3 UDC on sm8850 may probe after the static start; the condition
+# turns that start into a clean skip instead of a run against an empty
+# /sys/class/udc, and the udev rule starts the unit once the controller
+# exists. After a successful run (RemainAfterExit) further events are no-ops.
+ConditionPathExistsGlob=/sys/class/udc/*
+# configfs is an API filesystem mounted by PID 1 (ncm-setup mounts it itself
+# as a fallback); gadget modules, if any, come from modules-load
+After=sys-kernel-config.mount systemd-modules-load.service
+# bring-up debug channel: be up before NetworkManager (After=network-pre.target)
+# and everything else in the network stack starts
+Wants=network-pre.target
+Before=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ncm-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

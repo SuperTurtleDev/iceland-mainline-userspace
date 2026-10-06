@@ -1,0 +1,38 @@
+# Packages installed into the sm8850 root filesystem image.
+#
+# The starting point is the stock docker.io/library/ubuntu:26.04 (arm64)
+# root filesystem -- apt/dpkg already present; everything below is
+# installed on top of it with --no-install-recommends.
+#
+# Scope: Ubuntu 26.04 base + initramfs/initrd tooling, NO kernel. Kernel
+# images/modules/firmware come from the separate kernel build and are
+# deliberately kept out of this image. How the image is booted (first-boot
+# bootstrap) is handled elsewhere; if the bootstrap later needs more than
+# this base (systemd, network, ssh, ...), add it here and rerun ./build.sh.
+
+# ---- boot essentials: the rootfs must be bootable --------------------------
+# systemd is pulled in by initramfs-tools on 26.04 anyway; listed explicitly
+# because it is PID 1. systemd-sysv provides /sbin/init -- without it the
+# kernel cannot execute the default init path at all.
+systemd                 # PID 1
+systemd-sysv            # /sbin/init -> systemd
+udev                    # device events / module autoloading
+sudo                    # the default user (below) gets admin via the sudo group
+
+# ---- networking / wifi debugging (bring-up essentials) ---------------------
+iproute2               # ip(8): links, addresses, routes
+network-manager        # NetworkManager + nmcli/nmtui (wifi config over serial console)
+iw                     # nl80211 wifi inspection
+rfkill                 # wireless block state
+
+# ---- the point of this rootfs: initramfs / initrd tooling ----------------
+initramfs-tools        # update-initramfs + initramfs-tools-core (mkinitramfs)
+busybox-initramfs      # busybox for the generated initrds (dependency anyway)
+cpio                   # archive backend used by mkinitramfs
+zstd                   # compression backend for initrds (-C zstd)
+xz-utils               # compression backend for initrds (-C xz / lzma)
+kmod                   # depmod / modprobe / modinfo (dependency anyway)
+
+# ---- root filesystem utilities -------------------------------------------
+e2fsprogs              # ext4 tooling: fsck.*, resize2fs (essential anyway)
+file                   # identify binaries/initrds while debugging

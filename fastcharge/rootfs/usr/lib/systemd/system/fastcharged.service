@@ -1,0 +1,18 @@
+[Unit]
+Description=fastcharge USB PD profile daemon (charge_boost_lite)
+Documentation=file:/etc/fastcharge/fastcharge.conf
+# the module is loaded by systemd-modules-load (see the modprobe.d/
+# modules-load.d files shipped with the package); the daemon also probes
+# it itself as a fallback
+After=systemd-modules-load.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/fastcharged
+Restart=always
+RestartSec=5
+# hardening: everything the daemon needs is sysfs access
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

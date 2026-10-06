@@ -1,0 +1,21 @@
+[Unit]
+Description=busybox telnetd root debug shell on the NCM gadget link
+Documentation=file:/usr/local/sbin/ncm-setup
+# connect a host to the NCM network and "telnet 192.168.42.42" for an
+# immediate busybox ash root shell -- no auth, debug preset only.
+# /usr/local/sbin/ash is a symlink to /bin/busybox: busybox dispatches on
+# argv[0], so that one symlink IS the shell
+After=NCM-setup.service
+Wants=NCM-setup.service
+
+[Service]
+Type=simple
+# busybox telnetd: -F (capital!) is foreground; lowercase -f is the
+# issue-FILE option and would swallow the next argument. -K closes the
+# connection when the shell exits (clean one-shot sessions).
+ExecStart=/bin/busybox telnetd -F -K -p 23 -l /usr/local/sbin/ash
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

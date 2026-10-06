@@ -1,0 +1,96 @@
+#!/bin/bash
+# ncm-setup -- USB NCM gadget debug network, a 1:1 port of the proven
+# kernel/initrd_debug setup (same busybox-static binary family, same USB
+# ids, same addresses, same udhcpd) to eliminate every variable.
+#
+# Started by NCM-setup.service: statically from multi-user.target.wants
+# (skipped by the unit's condition while no UDC exists) and by udev
+# (/etc/udev/rules.d/90-ncm-udc.rules) as soon as a UDC appears.
+# The telnet root shell is a separate unit (ncm-telnetd.service).
+#
+# The interface is marked unmanaged for NetworkManager via
+# /etc/NetworkManager/conf.d/99-ncm-unmanaged.conf.
+#
+# Idempotent: safe to re-run (an existing gadget is only re-bound).
+set -euo pipefail
+
+BB=/bin/busybox
+G=/sys/kernel/config/usb_gadget/g1
+
+log() { echo "ncm-setup: $*" >&2; }
+
+# ---- configfs (PID 1 mounts it on real boots; fallback here) ------------------
+if ! mountpoint -q /sys/kernel/config; then
+    modprobe configfs 2>/dev/null || true
+    mount -t configfs configfs /sys/kernel/config \
+        || { log "cannot mount configfs; giving up"; exit 1; }
+fi
+modprobe libcomposite 2>/dev/null || true
+
+# ---- gadget: same ids/strings as initrd_debug ----------------------------------
+if [ ! -d "${G}" ]; then
+    log "creating NCM gadget (18d1:d001, same as initrd_debug)"
+    mkdir "${G}"
+    echo 0x18d1 > "${G}/idVendor"
+    echo 0xd001 > "${G}/idProduct"
+    echo 0x0200 > "${G}/bcdUSB"
+    mkdir -p "${G}/strings/0x409"
+    echo "Oneplus Pad 4 mainline" > "${G}/strings/0x409/manufacturer"
+    echo "sm8850 debug"           > "${G}/strings/0x409/product"
+    echo "iceland-debug"          > "${G}/strings/0x409/serialnumber"
+    mkdir "${G}/functions/ncm.usb0"
+    mkdir -p "${G}/configs/c.1/strings/0x409"
+    echo "debug" > "${G}/configs/c.1/strings/0x409/configuration"
+fi
+# the config->function link, ABSOLUTE target like initrd_debug: a relative
+# target does not resolve inside configfs, ln fails, and binding a config
+# without functions gives exactly the kernel -22 "need at least one
+# function". Checked on every run so retries after a partial start work.
+mkdir -p "${G}/functions/ncm.usb0" "${G}/configs/c.1"
+[ -e "${G}/configs/c.1/ncm.usb0" ] || \
+    ln -sf "${G}/functions/ncm.usb0" "${G}/configs/c.1/ncm.usb0"
+
+# ---- wait for the UDC, then bind (same retry shape as initrd_debug) -------------
+udc=""
+i=0
+while [ "$i" -lt 20 ]; do
+    udc="$(ls /sys/class/udc 2>/dev/null | head -1)"
+    [ -n "${udc}" ] && break
+    sleep 0.5
+    i=$((i + 1))
+done
+if [ -z "${udc}" ]; then
+    # do not report success: the unit must stay startable so the udev rule
+    # can run it again once the controller has probed
+    log "no UDC in /sys/class/udc; gadget configured but not bound (udev restarts this when the controller appears)"
+    exit 1
+fi
+if [ "$(cat "${G}/UDC" 2>/dev/null || true)" != "${udc}" ]; then
+    echo "${udc}" > "${G}/UDC" \
+        && log "bound gadget g1 to UDC ${udc}" \
+        || { log "failed to bind UDC ${udc}"; exit 1; }
+fi
+
+# ---- wait for usb0, then configure our end of the link ---------------------------
+i=0
+while [ "$i" -lt 20 ]; do
+    [ -d /sys/class/net/usb0 ] && break
+    sleep 0.5
+    i=$((i + 1))
+done
+if ! [ -d /sys/class/net/usb0 ]; then
+    log "usb0 did not appear after binding"
+    exit 1
+fi
+# busybox ifconfig, exactly like initrd_debug
+"${BB}" ifconfig usb0 192.168.42.42 netmask 255.255.255.0 up \
+    && log "usb0 up at 192.168.42.42/24" \
+    || log "ifconfig usb0 failed"
+
+# ---- DHCP server for the host end: busybox udhcpd, same as initrd_debug ---------
+touch /tmp/udhcpd.leases 2>/dev/null || log "cannot touch lease file"
+if ! pidof udhcpd >/dev/null 2>&1; then
+    "${BB}" udhcpd /etc/udhcpd.conf \
+        && log "udhcpd started (host end gets 192.168.42.100-200)" \
+        || log "udhcpd failed to start"
+fi

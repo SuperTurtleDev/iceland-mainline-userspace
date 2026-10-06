@@ -1,0 +1,8 @@
+# ubuntu_desktop preset: mask every kernel and firmware package out of apt
+# resolution. The kernel image, modules and firmware come from the separate
+# kernel build and must NOT land in the rootfs image (Pin-Priority -1 makes
+# apt treat these as never-installable, incl. HWE/flavor variants pulled in
+# by the ubuntu-desktop metapackage).
+Package: linux-image-* linux-modules-* linux-headers-* linux-generic-* linux-firmware*
+Pin: release *
+Pin-Priority: -1

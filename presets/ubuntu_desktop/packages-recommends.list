@@ -1,0 +1,8 @@
+# Packages installed WITH recommends (--addition-presents ubuntu_desktop).
+#
+# Standard desktop metapackages carry most of the desktop via Recommends,
+# so unlike the base packages.list these are installed without
+# --no-install-recommends. Kernel/firmware masking is handled by
+# apt-preferences/no-kernel (a "pkg-" trailing-dash entry here would work
+# too, but the preferences mask also catches HWE/flavor variants).
+ubuntu-desktop

@@ -1,0 +1,11 @@
+# debug preset: start NCM-setup.service as soon as a USB device controller
+# exists.
+#
+# The dwc3 UDC on sm8850 can probe late (deferred on PHY / role-switch
+# suppliers), possibly after multi-user.target has been reached. The static
+# start of NCM-setup.service is skipped while /sys/class/udc is empty (unit
+# ConditionPathExistsGlob=); this rule starts it the moment a controller
+# appears. systemd-udev-trigger replays the "add" event for controllers that
+# probed before udev was running, so both early and late probes are covered.
+# Once the unit is active (RemainAfterExit=yes) further events are no-ops.
+ACTION=="add", SUBSYSTEM=="udc", TAG+="systemd", ENV{SYSTEMD_WANTS}+="NCM-setup.service"

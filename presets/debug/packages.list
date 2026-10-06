@@ -1,0 +1,11 @@
+# Extra packages installed only when the debug preset is selected
+# (--addition-presents debug).
+#
+# Same parsing rules as the top-level packages.list (blank lines and
+# #-comments ignored, trailing comments stripped). Networking basics
+# (iproute2, network-manager, iw, rfkill) live in the base list now.
+
+# the exact busybox the initrd debug network uses (busybox-static:arm64):
+# udhcpd (DHCP server for the host end) + telnetd (root debug shell) come
+# from it, eliminating any toolchain differences against initrd_debug
+busybox-static
