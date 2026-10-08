@@ -145,15 +145,20 @@ for p in ${PRESENTS:-}; do
         chroot_run apt-get install -y $(pkglist "${META}/presets/${p}/packages-recommends.list")
     fi
     if [ -f "${META}/presets/${p}/debs.list" ]; then
+        # collect the whole set, then ONE dpkg -i so intra-set dependencies
+        # resolve within the same batch (dpkg configures after unpacking all)
+        DEBFILES=""
         for g in $(pkglist "${META}/presets/${p}/debs.list"); do
             for d in "${WORK}/debs"/${g}; do
                 [ -f "$d" ] || die "deb not found for preset ${p}: ${g} (in ${WORK}/debs)"
-                log "installing preset ${p} deb: $(basename "$d")"
-                cp -f "$d" "${TREE}/tmp/"
-                chroot_run dpkg -i "/tmp/$(basename "$d")"
-                rm -f "${TREE}/tmp/$(basename "$d")"
+                DEBFILES="${DEBFILES} $d"
             done
         done
+        echo "[build-tree] installing preset ${p} debs:$(basename -a ${DEBFILES} | tr '\n' ' ')"
+        cp -f ${DEBFILES} "${TREE}/tmp/"
+        # shellcheck disable=SC2086
+        chroot_run dpkg -i $(basename -a ${DEBFILES} | sed -e 's|^|/tmp/|')
+        rm -f "${TREE}/tmp/"*.deb
     fi
 done
 

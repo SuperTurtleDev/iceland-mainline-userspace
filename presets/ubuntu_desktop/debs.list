@@ -1,0 +1,9 @@
+# locally built / pinned debs installed into the rootfs (globs expanded in
+# WORK/debs; built automatically by build-deb.sh from the sensor workspace)
+# -- batch-installed in one dpkg -i so intra-set deps resolve together
+iceland-sensors_*_all.deb
+iio-sensor-proxy_*iceland*_arm64.deb
+libssc2_*_arm64.deb
+libssc-bin_*_arm64.deb
+fastrpc-support_*_arm64.deb
+libfastrpc1_*_arm64.deb

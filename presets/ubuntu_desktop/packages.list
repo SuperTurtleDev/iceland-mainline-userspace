@@ -1,0 +1,10 @@
+# Ubuntu-archive runtime dependencies of the sensor debs (the debs
+# themselves are built by build-deb.sh from the sensor workspace)
+libgudev-1.0-0
+libpolkit-gobject-1-0
+libprotobuf-c1
+libqmi-glib5
+libqmi-proxy
+libbsd0
+libyaml-0-2
+acl
