@@ -324,6 +324,22 @@ static long power_rank(const struct rule *r)
 /* ---- charge_boost_lite interaction ----------------------------------------- */
 static char pbuf[128], upath[160], bpath[160];
 
+/* vbus_now can briefly read garbage right after events (observed 47000 uV
+ * during boot-with-cable); retry and require a plausible value */
+static int read_vbus_valid(long *out)
+{
+    long v = 0;
+    for (int i = 0; i < 3; i++) {
+        if (read_file_int(upath, &v) == 0 && v >= 4200000 && v <= 13000000) {
+            *out = v;
+            return 0;
+        }
+        usleep(400 * 1000);
+    }
+    *out = v;
+    return -1;
+}
+
 static int module_ready(void)
 {
     struct stat st;
@@ -386,11 +402,11 @@ static int apply_pdo(const struct rule *r)
     sleep(2);
 
     long vbus = 0;
-    int ok = read_file_int(upath, &vbus) == 0 && pdo_reached(r->mv, vbus);
+    int ok = read_vbus_valid(&vbus) == 0 && pdo_reached(r->mv, vbus);
     if (!ok) {   /* one retry, mirroring the reference sequence */
         write_file_int(path, r->mv);
         sleep(2);
-        ok = read_file_int(upath, &vbus) == 0 && pdo_reached(r->mv, vbus);
+        ok = read_vbus_valid(&vbus) == 0 && pdo_reached(r->mv, vbus);
     }
     if (!ok) {
         ts_log("PDO %d did not engage (vbus=%ld uV)", r->mv, vbus);
@@ -402,7 +418,7 @@ static int apply_pdo(const struct rule *r)
         ts_log("cannot raise ICL to %ld uA (%s)", icl_ua, strerror(errno));
         return -1;
     }
-    vlog("PDO %d mV / %d mA engaged (vbus=%ld uV)", r->mv, r->ma, vbus);
+    ts_log("PDO engaged: %d mV / %d mA (vbus=%ld uV)", r->mv, r->ma, vbus);
     return 0;
 }
 
@@ -428,14 +444,14 @@ static int apply_pps_point(int mv, int ma)
     }
     sleep(2);
 
-    int ok = read_file_int(upath, &vbus) == 0 && pps_reached(mv, vbus);
+    int ok = read_vbus_valid(&vbus) == 0 && pps_reached(mv, vbus);
     if (!ok) {   /* one retry */
         parm_path(path, sizeof(path), "pps_mv");
         write_file_int(path, mv);
         parm_path(path, sizeof(path), "pps_ma");
         write_file_int(path, ma);
         sleep(2);
-        ok = read_file_int(upath, &vbus) == 0 && pps_reached(mv, vbus);
+        ok = read_vbus_valid(&vbus) == 0 && pps_reached(mv, vbus);
     }
     if (!ok) {
         ts_log("PPS %d mV did not engage (vbus=%ld uV)", mv, vbus);
@@ -444,7 +460,7 @@ static int apply_pps_point(int mv, int ma)
 
     parm_path(path, sizeof(path), "curr_uv");
     write_file_int(path, (long)ma * 1000);
-    vlog("PPS %d mV / %d mA engaged (vbus=%ld uV)", mv, ma, vbus);
+    ts_log("PPS engaged: %d mV / %d mA (vbus=%ld uV)", mv, ma, vbus);
     return 0;
 }
 
@@ -475,6 +491,7 @@ enum mode { MODE_NONE = 0, MODE_PDO, MODE_PPS };
 static const struct rule *cur_rule;      /* currently applied rule, NULL = baseline */
 static const struct rule *cand_rule;     /* candidate for stepping up in power */
 static int cand_ticks;
+static int apply_fails;                  /* consecutive failed applies -> re-detect */
 static enum mode cur_mode = MODE_NONE;
 static int pps_ask_mv;                   /* current PPS operating point */
 
@@ -536,6 +553,11 @@ int main(int argc, char **argv)
         long online = 0, soc = 0, temp = 0, vbus = 0, vbat = 0;
 
         snprintf(q, sizeof(q), "%s/online", opt_usb ? opt_usb : PS_USB);
+        /* "online" (not vbus>3V) is the presence gate on purpose: it is
+         * role-aware -- in OTG/host mode the tablet drives its own 5V VBUS
+         * for peripherals and online stays 0, while a bare vbus threshold
+         * would false-positive and hammer the ADSP with PD writes in host
+         * role. vbus only feeds the sanity window below */
         int have_online = read_file_int(q, &online) == 0 && online == 1;
 
         if (!have_online) {
@@ -581,10 +603,13 @@ int main(int argc, char **argv)
             }
         }
 
-        /* gates + measurements */
+        /* gates + measurements. NOTE: battery status is deliberately NOT a
+         * gate: at boot-with-cable the 5V baseline input can be below the
+         * system load, the battery net-drains and reports "Discharging" --
+         * gating on it deadlocks exactly when raising input power is the
+         * fix. status is only logged */
         snprintf(q, sizeof(q), "%s/status", bpath);
-        int charging = read_file_str(q, sbuf, sizeof(sbuf)) == 0 &&
-                       !strcmp(sbuf, "Charging");
+        int have_status = read_file_str(q, sbuf, sizeof(sbuf)) == 0;
         snprintf(q, sizeof(q), "%s/capacity", bpath);
         int have_soc = read_file_int(q, &soc) == 0;
         snprintf(q, sizeof(q), "%s/temp", bpath);
@@ -593,12 +618,13 @@ int main(int argc, char **argv)
         int have_vbat = read_file_int(q, &vbat) == 0;
         int have_vbus = read_file_int(upath, &vbus) == 0;
 
-        if (!charging || !have_soc || !have_temp || !have_vbus ||
+        if (!have_soc || !have_temp || !have_vbus ||
             (mode == MODE_PPS && !have_vbat) ||
             vbus < VBUS_MIN_UV || vbus > VBUS_MAX_UV) {
             if (cur_rule) {
-                ts_log("gate trip (charging=%d soc=%ld temp=%ld vbus=%ld)"
-                       " -> 5 V baseline", charging, soc, temp, vbus);
+                ts_log("gate trip (status=%s soc=%ld temp=%ld vbus=%ld)"
+                       " -> 5 V baseline", have_status ? sbuf : "?",
+                       soc, temp, vbus);
                 request_baseline();
                 cur_rule = NULL;
                 cur_mode = MODE_NONE;
@@ -649,12 +675,22 @@ int main(int argc, char **argv)
                 rc = apply_pdo(want);
             }
             if (rc == 0) {
+                apply_fails = 0;
                 cur_rule = want;
                 cur_mode = mode;
             } else {
                 request_baseline();
                 cur_rule = NULL;
                 cur_mode = MODE_NONE;
+                if (++apply_fails >= 3) {
+                    /* the ADSP contract state is stale (e.g. garbage vbus
+                     * reads right after boot-with-cable): fall back to the
+                     * detection loop instead of waiting for a replug */
+                    ts_log("3 failed applies -> re-running PD detection");
+                    pd_seen = 0;
+                    pd_waited = 0;
+                    apply_fails = 0;
+                }
             }
             cand_rule = NULL;
             cand_ticks = 0;
@@ -670,12 +706,19 @@ int main(int argc, char **argv)
                         rc = apply_pdo(want);
                     }
                     if (rc == 0) {
+                        apply_fails = 0;
                         cur_rule = want;
                         cur_mode = mode;
                     } else {
                         request_baseline();
                         cur_rule = NULL;
                         cur_mode = MODE_NONE;
+                        if (++apply_fails >= 3) {
+                            ts_log("3 failed applies -> re-running PD detection");
+                            pd_seen = 0;
+                            pd_waited = 0;
+                            apply_fails = 0;
+                        }
                     }
                     cand_rule = NULL;
                     cand_ticks = 0;
