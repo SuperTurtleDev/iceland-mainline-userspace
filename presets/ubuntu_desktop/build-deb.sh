@@ -43,8 +43,15 @@ CACHE="$(dirname "${DEB_OUT}")/sensors-build/apt-cache"
 mkdir -p "${STAGE}" "${CACHE}/archives/partial" "${CACHE}/lists/partial" "${DEB_OUT}"
 
 log "building in a one-shot stock ${BASE} (linux/arm64) container"
+# MIRROR=... (e.g. the TUNA ubuntu-ports mirror) also speeds up the build
+# dependency download inside the container
+EXTRA_ENV=()
+if [ -n "${MIRROR:-}" ]; then
+    EXTRA_ENV=(-e "MIRROR=${MIRROR}")
+fi
 podman run --rm \
     --platform linux/arm64 \
+    "${EXTRA_ENV[@]}" \
     -v "${SENSOR_SRC}:/src:ro" \
     -v "${STAGE}:/stage" \
     -v "${CACHE}/archives:/var/cache/apt/archives" \
@@ -55,6 +62,11 @@ podman run --rm \
 [ "$(uname -m)" = aarch64 ] || { echo "not aarch64" >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive LC_ALL=C
 B=/src; S=/stage
+
+if [ -n "${MIRROR:-}" ]; then
+    printf "deb %s resolute main restricted universe multiverse\n" "${MIRROR}" \
+        > /etc/apt/sources.list
+fi
 
 apt-get update
 apt-get install -y --no-install-recommends build-essential fakeroot \

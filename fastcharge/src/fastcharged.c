@@ -492,6 +492,7 @@ static const struct rule *cur_rule;      /* currently applied rule, NULL = basel
 static const struct rule *cand_rule;     /* candidate for stepping up in power */
 static int cand_ticks;
 static int apply_fails;                  /* consecutive failed applies -> re-detect */
+static int drop_count;                   /* charger-gone events in a row -> backoff */
 static enum mode cur_mode = MODE_NONE;
 static int pps_ask_mv;                   /* current PPS operating point */
 
@@ -568,9 +569,25 @@ int main(int argc, char **argv)
                 cur_mode = MODE_NONE;
             }
             pd_seen = pd_waited = 0;
-            sleep(opt_interval);
+            /* exponential backoff: after 3 rapid dropouts start waiting
+             * 30s between re-engagement attempts to avoid hammering the
+             * ADSP/adapter into the PPS error state (observed as result
+             * 512 after ~28 rapid cycles) */
+            drop_count++;
+            int wait_s = opt_interval;
+            if (drop_count >= 3)
+                wait_s = 30;
+            if (drop_count >= 6)
+                wait_s = 120;
+            if (drop_count >= 10) {
+                ts_log("%d charger dropouts -- backing off to 5 min", drop_count);
+                wait_s = 300;
+            }
+            sleep(wait_s);
             continue;
         }
+        /* charger is back: reset the dropout counter */
+        drop_count = 0;
 
         if (!module_ready() && modprobe_module() != 0) {
             sleep(opt_interval);

@@ -1,0 +1,16 @@
+[Unit]
+Description=keymaster TA bootstrap (boot-state report to QTEE for SM8850)
+# runs early so Waydroid's keymint HAL finds the TA already initialised
+After=systemd-udevd.service
+Before=waydroid-container.service
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/km-init
+# the whole sequence is idempotent per boot; retry a few times in case
+# the TEE device shows up late
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
