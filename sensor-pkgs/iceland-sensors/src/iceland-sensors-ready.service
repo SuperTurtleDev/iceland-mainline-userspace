@@ -1,0 +1,12 @@
+[Unit]
+Description=Start iio-sensor-proxy once the iceland SSC sensors publish
+After=iceland-adsprpcd-sensorspd.service
+Before=display-manager.service iio-sensor-proxy.service
+Wants=iio-sensor-proxy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/iceland-sensors/iceland-sensors-wait
+
+[Install]
+WantedBy=multi-user.target

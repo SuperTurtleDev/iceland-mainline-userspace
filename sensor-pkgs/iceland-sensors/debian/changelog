@@ -1,0 +1,67 @@
+iceland-sensors (0.7) resolute; urgency=medium
+
+  * Rework the boot gate: the sensors PD unit is a plain daemon again, and
+    a separate oneshot iceland-sensors-ready waits for the accelerometer
+    via libssc directly (ssccli, no DBus side effects - the old busctl
+    wait activated the proxy early and left it half-discovered, which is
+    what broke rotation, and it delayed boot by 30s+). The wait is capped
+    at 20 s and non-fatal; once passed, the proxy starts through a Wants=
+    dependency with the display manager ordered after it, so the first
+    session probe finds a fully discovered proxy.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 12:30:00 +0000
+
+iceland-sensors (0.6) resolute; urgency=medium
+
+  * Standard architecture, no helpers: drop the claim daemon (0.5, never
+    released) and the late-refresh bounce (0.3). The sensors PD unit now
+    waits for sensor publication as ExecStartPost and is ordered
+    Before=display-manager.service, so gnome-shell's one-shot probe of
+    iio-sensor-proxy always finds the sensors and mutter/gsd-power own
+    the claims, on demand, as upstream designed.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 12:00:00 +0000
+
+iceland-sensors (0.5) resolute; urgency=medium
+
+  * Add iceland-sensors-claim: a daemon that permanently holds the
+    accelerometer, light and proximity claims (re-claiming on every proxy
+    restart). The proxy only polls claimed sensors; relying on desktop
+    clients froze the data repeatedly on this device.
+  * Drop the 0.3 late-refresh bounce: superseded by the permanent claimant.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 11:40:00 +0000
+
+iceland-sensors (0.4) resolute; urgency=medium
+
+  * Flip ACCEL_MOUNT_MATRIX to (0,1,0; -1,0,0; 0,0,1): on-glass calibration
+    showed the +90 deg matrix rotated the picture but upside down; -90 deg
+    is the correct display-frame rotation (matches piano-sensors).
+  * Includes the 0.3 late-refresh boot-race self-heal unit.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 11:20:00 +0000
+
+iceland-sensors (0.3) resolute; urgency=medium
+
+  * Add iceland-sensors-late-refresh.service: bounce iio-sensor-proxy once
+    the SSC sensors are published, so desktop clients that probed the proxy
+    too early during boot re-claim. Fixes no-rotation/no-auto-brightness
+    after reboot with a perfectly healthy sensor stack.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 11:00:00 +0000
+
+iceland-sensors (0.2) resolute; urgency=medium
+
+  * Add ACCEL_MOUNT_MATRIX (0,-1,0; 1,0,0; 0,0,1): display frame is rotated
+    90 deg CW of the physical/sensor frame, dock landed on the bottom edge
+    without it.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 10:05:00 +0000
+
+iceland-sensors (0.1) resolute; urgency=medium
+
+  * Initial release: stock sensor JSON + persist import, symlink farm,
+    adsprpcd sensorsPD service, SSC udev tags for iio-sensor-proxy,
+    mask fastrpc root/audio PD daemons.
+
+ -- Iceland mainline <dev@localhost>  Wed, 07 Oct 2026 09:00:00 +0000

@@ -1,0 +1,12 @@
+#!/bin/sh
+# disable units that earlier package versions shipped and this one drops
+if [ "$1" = upgrade ] || [ "$1" = remove ]; then
+	for u in iceland-sensors-claim iceland-sensors-late-refresh; do
+		if [ -e "/etc/systemd/system/multi-user.target.wants/$u.service" ] || \
+		   systemctl --quiet is-enabled "$u.service" 2>/dev/null; then
+			systemctl disable "$u.service" >/dev/null 2>&1 || true
+			systemctl stop "$u.service" >/dev/null 2>&1 || true
+		fi
+	done
+fi
+exit 0

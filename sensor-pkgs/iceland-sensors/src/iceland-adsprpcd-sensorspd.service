@@ -1,0 +1,15 @@
+[Unit]
+Description=Iceland sensors PD FastRPC daemon (adsprpcd sensorspd)
+Requires=iceland-sensors-import.service
+After=iceland-sensors-import.service
+Before=iceland-sensors-ready.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'for i in $(seq 60); do [ -e /dev/fastrpc-adsp-secure ] && exit 0; sleep 1; done; exit 1'
+ExecStart=/usr/sbin/adsprpcd sensorspd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

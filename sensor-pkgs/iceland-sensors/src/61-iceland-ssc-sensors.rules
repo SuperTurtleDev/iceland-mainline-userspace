@@ -1,0 +1,7 @@
+# Iceland (OnePlus Pad 4): expose the ADSP SSC sensors to iio-sensor-proxy.
+# Panel framebuffer is presented 90° CCW of the physical frame (dock lands
+# on the bottom edge); the BMI3x0 matches the physical frame exactly (SEE
+# registry orient x+y/z, verified: flat-on-desk reads Z=+g and camera-top
+# reads (0,-g,0)). Rotate sensor readings -90° about Z into the display (calibrated on-glass 2026-10-07: +90° gave an upside-down picture)
+# frame: derived and verified 2026-10-07.
+SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel ssc-proximity ssc-light ssc-compass", ENV{ACCEL_MOUNT_MATRIX}="0, 1, 0; -1, 0, 0; 0, 0, 1"

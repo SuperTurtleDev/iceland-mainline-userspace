@@ -1,0 +1,16 @@
+Source: iceland-sensors
+Section: utils
+Priority: optional
+Maintainer: Iceland mainline <dev@localhost>
+Build-Depends: debhelper (>= 13)
+Standards-Version: 4.7.0
+
+Package: iceland-sensors
+Architecture: all
+Depends: fastrpc-support, systemd (>= 255)
+Description: Qualcomm SSC sensors bring-up data and services for OnePlus Pad 4 (iceland)
+ Imports the stock-ROM sensor configuration (vendor/odm SEE JSON and the
+ persist sensors registry) to /var/lib/iceland-sensors and links the paths
+ the ADSP sensors protection domain requests to those copies. Ships the
+ adsprpcd sensorsPD service, the udev tags that let iio-sensor-proxy find
+ the SSC sensors, and masks the fastrpc root/audio PD daemons.

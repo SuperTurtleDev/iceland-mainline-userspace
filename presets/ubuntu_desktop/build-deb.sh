@@ -2,8 +2,8 @@
 # ubuntu_desktop preset deb builder: SENSORS, from source, automatically.
 #
 # Called by ../../build.sh (DEB_OUT=WORK/debs) before the rootfs stages.
-# Replays the sensor workspace's on-device build (sensor-pkgs/build-all.sh)
-# inside a one-shot stock ubuntu:26.04 arm64 container instead:
+# Replays the sensor package build inside a one-shot stock ubuntu:26.04
+# arm64 container:
 #   1. verify the pinned inputs (upstream/ + foreign/ SHA256SUMS)
 #   2. install build deps incl. the pinned foreign debs (libssc, fastrpc)
 #   3. dpkg-buildpackage iceland-sensors (native arm64)
@@ -13,21 +13,20 @@
 #   5. collect iceland-sensors_*.deb + iio-sensor-proxy_*iceland*.deb and
 #      the runtime foreign debs into DEB_OUT
 #
-# Source of truth: the sensor workspace, SENSOR_SRC (default
-# /home/wyb/Documents/sensor/sensor-pkgs). It lives outside this repo on
-# purpose -- point SENSOR_SRC=... elsewhere to move it.
+# Sources live IN THIS REPO at ../../sensor-pkgs/ — fully self-contained.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEB_OUT="${DEB_OUT:?set by build.sh}"
-SENSOR_SRC="${SENSOR_SRC:-/home/wyb/Documents/sensor/sensor-pkgs}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SENSOR_SRC="${HERE}/../../sensor-pkgs"
 BASE="${BASE_IMAGE:-docker.io/library/ubuntu:26.04}"
 
 log() { printf '[sensors-build] %s\n' "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
 
 command -v podman >/dev/null 2>&1 || die "podman not found"
-[ -d "${SENSOR_SRC}/iceland-sensors" ] || die "sensor sources not found at ${SENSOR_SRC} (SENSOR_SRC=... to override)"
+[ -d "${SENSOR_SRC}/iceland-sensors" ] || die "sensor sources not found at ${SENSOR_SRC}"
 [ -f "${SENSOR_SRC}/iio-sensor-proxy-overlay/0001-ssc-claim-race.patch" ] || die "ssc patch missing"
 [ -f "${SENSOR_SRC}/upstream/SHA256SUMS" ] || die "upstream pins missing"
 [ -f "${SENSOR_SRC}/foreign/SHA256SUMS" ] || die "foreign pins missing"

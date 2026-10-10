@@ -1,0 +1,12 @@
+[Unit]
+Description=Stage iceland SSC sensors configuration for adsprpcd
+After=local-fs.target
+Before=iceland-adsprpcd-sensorspd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/iceland-sensors/iceland-sensors-import
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,33 @@
+#!/bin/sh
+# iceland-sensors-import - stage the SSC sensors PD inputs for adsprpcd.
+#
+# The ADSP sensors protection domain reads its JSON configuration from
+# /vendor/etc/sensors/config (json.lst, vendor SEE configs) and
+# /odm/etc/sensor/config (json_list, OPlus SEE configs), and keeps its
+# registry and calibration in /persist/sensors. Without json.lst it gives
+# up before reading the registry. All of it is device-specific stock-ROM
+# data; it is shipped inside this package and staged to
+# /var/lib/iceland-sensors, with the paths the PD asks for linked to the
+# copies. Each part is imported only while it is missing; delete it to
+# re-import.
+set -eu
+
+ROOT=/var/lib/iceland-sensors
+PAYLOAD=/usr/share/iceland-sensors/payload.tar.gz
+
+log() { echo "iceland-sensors-import: $*"; }
+
+if [ ! -d "$ROOT/vendor/etc/sensors/config" ]; then
+	mkdir -p "$ROOT"
+	tar xzf "$PAYLOAD" -C "$ROOT" --no-same-owner
+	log "staged sensor payload to $ROOT"
+fi
+
+# Paths the sensors PD requests (adsprpcd opens them as-is).
+mkdir -p /vendor/etc /odm/etc /persist /mnt/vendor/persist
+ln -sfn "$ROOT/vendor/etc/sensors" /vendor/etc/sensors
+ln -sfn "$ROOT/odm/etc/sensor"     /odm/etc/sensor
+ln -sfn "$ROOT/odm/etc/sensor"     /odm/etc/sensors
+ln -sfn "$ROOT/persist/sensors"    /persist/sensors
+ln -sfn "$ROOT/persist/sensors"    /mnt/vendor/persist/sensors
+log "symlink farm in place"

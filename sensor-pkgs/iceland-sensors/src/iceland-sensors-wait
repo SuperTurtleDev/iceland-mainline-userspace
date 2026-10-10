@@ -1,0 +1,21 @@
+#!/bin/sh
+# iceland-sensors-wait - block until the SSC accelerometer publishes data.
+#
+# Probes libssc directly (ssccli goes over QRTR to the sensors service, it
+# never touches iio-sensor-proxy), so waiting cannot activate the proxy
+# early: a half-discovered proxy would stay half-discovered forever, which
+# is exactly how rotation broke before. Bounded and non-fatal: on timeout
+# the boot proceeds and the failure is logged.
+set -u
+
+i=0
+while [ "$i" -lt 20 ]; do
+	if timeout 3 ssccli --sensor accelerometer --timeout 2 2>/dev/null | grep -q 'm/s'; then
+		echo "iceland-sensors-wait: accelerometer published after ${i}s"
+		exit 0
+	fi
+	i=$((i + 1))
+	sleep 1
+done
+echo "iceland-sensors-wait: accelerometer not published within 20s, continuing" >&2
+exit 0

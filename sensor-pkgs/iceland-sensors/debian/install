@@ -1,0 +1,7 @@
+src/iceland-sensors-import               usr/libexec/iceland-sensors/
+src/iceland-sensors-wait                 usr/libexec/iceland-sensors/
+src/iceland-sensors-import.service       usr/lib/systemd/system/
+src/iceland-adsprpcd-sensorspd.service   usr/lib/systemd/system/
+src/iceland-sensors-ready.service        usr/lib/systemd/system/
+src/61-iceland-ssc-sensors.rules         usr/lib/udev/rules.d/
+src/payload.tar.gz                       usr/share/iceland-sensors/

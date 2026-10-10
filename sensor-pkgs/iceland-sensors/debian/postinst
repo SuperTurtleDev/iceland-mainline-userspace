@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+	deb-systemd-helper enable iceland-sensors-import.service iceland-adsprpcd-sensorspd.service iceland-sensors-ready.service >/dev/null 2>&1 || true
+	deb-systemd-invoke start iceland-sensors-import.service >/dev/null 2>&1 || true
+	deb-systemd-invoke start iceland-adsprpcd-sensorspd.service >/dev/null 2>&1 || true
+fi
+# dh_systemd_start fallback
+exit 0
