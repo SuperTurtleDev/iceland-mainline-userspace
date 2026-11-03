@@ -192,12 +192,15 @@ cat > "${TREE}/etc/fstab" <<FSTAB
 # <device> <mount> <type> <options> <dump> <pass>
 /dev/root  /       auto   rw        0       1
 FSTAB
-# power: NOTHING may suspend on this platform -- s2idle does not resume
-# either (a suspend is effectively a poweroff), so mask the whole sleep
-# family. The power key locks the screen instead (see the logind drop-in
-# below); long-press poweroff stays available.
-for u in systemd-suspend.service suspend.target \
-         systemd-hibernate.service systemd-suspend-then-hibernate.service \
+# Use standard systemd suspend with s2idle. Hibernation is not configured.
+mkdir -p "${TREE}/etc/systemd/sleep.conf.d"
+cat > "${TREE}/etc/systemd/sleep.conf.d/60-iceland-s2idle.conf" <<SLEEP
+[Sleep]
+AllowSuspend=yes
+SuspendState=mem
+MemorySleepMode=s2idle
+SLEEP
+for u in systemd-hibernate.service systemd-suspend-then-hibernate.service \
          systemd-hybrid-sleep.service; do
     ln -sfn /dev/null "${TREE}/etc/systemd/system/${u}"
 done
@@ -220,27 +223,30 @@ Suites: ${SUITE}-security
 Components: main restricted universe multiverse
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 APTSRC
-# power button, Android-style: short press LOCKS the screen, long press
-# powers off, and nothing ever suspends (s2idle does not resume on this
-# platform yet). logind's lock action drives the session Lock() that
-# gnome-shell turns into the lock screen; GNOME itself is set to 'nothing'
-# so the key falls through to logind, and idle auto-suspend is disabled
+# Short press suspends through GNOME when it owns the power key, otherwise
+# through logind. Long press powers off. Keep automatic idle sleep disabled.
 mkdir -p "${TREE}/etc/systemd/logind.conf.d"
 cat > "${TREE}/etc/systemd/logind.conf.d/50-power-button.conf" <<LOGIND
 [Login]
-HandlePowerKey=lock
+HandlePowerKey=suspend
 HandlePowerKeyLongPress=poweroff
-HandleSuspendKey=ignore
+HandleSuspendKey=suspend
 HandleHibernateKey=ignore
 LOGIND
 mkdir -p "${TREE}/etc/dconf/profile" "${TREE}/etc/dconf/db/local.d"
 printf 'user-db:user\nsystem-db:local\n' > "${TREE}/etc/dconf/profile/user"
 cat > "${TREE}/etc/dconf/db/local.d/00-power" <<DCONF
 [org/gnome/settings-daemon/plugins/power]
-power-button-action='nothing'
+power-button-action='suspend'
 sleep-inactive-battery-type='nothing'
 sleep-inactive-ac-type='nothing'
 DCONF
+# GDM has a separate profile; include the same power defaults for the greeter
+# while preserving the distribution's remaining greeter settings.
+if [ -f "${TREE}/usr/share/dconf/profile/gdm" ]; then
+    sed '/^user-db:/a system-db:local' "${TREE}/usr/share/dconf/profile/gdm" \
+        > "${TREE}/etc/dconf/profile/gdm"
+fi
 # empty machine-id (re-created on first boot), headless default target,
 # well-known mountpoint dirs, no variable leftovers inside the tree.
 # NOTE: the apt caches are bind mounts -- do NOT clean them here (that
