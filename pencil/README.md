@@ -82,10 +82,16 @@ unknown bits are rejected. Following the prefix:
 Each source bit defaults to zero (IC). Setting it to one selects userspace and
 filters IC updates for that property. Injection into an IC-owned property is
 rejected. Coordinates, tilt and proximity continue to come from the IC. Pressure
-and buttons are emitted on the existing pen evdev device only while the IC has
-reported a pen position. Leaving range, suspend and firmware reload release all
-input state and clear cached values, while retaining source selection. Changing
-a source bit clears the injected value for that property.
+and tip contact require an IC-reported pen position; userspace-owned side buttons
+are emitted even outside that range. Leaving range clears pressure and IC-owned
+buttons, retaining injected buttons and the last position. Suspend and firmware
+reload release all input state and clear cached values, retaining source selection.
+Changing a source bit clears the injected value for that property.
+
+These are evdev semantics. libinput 1.31.1 suppresses tablet-tool events outside
+proximity and releases side buttons on proximity-out. Off-screen button actions
+in a desktop therefore need separate userspace mapping; retaining coordinates
+alone does not make libinput deliver those button events.
 
 ```
 sudo nvtctl send 4e 56 54 00 03 01       # pen pressure, IC buttons
