@@ -1,0 +1,10 @@
+# The pen reports native portrait coordinates; the display is landscape.
+# Correct the native axis ranges before libinput normalizes them, then swap
+# axes and invert display Y. Match the integrated digitizer, not BLE HID.
+ACTION!="remove", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="NVTCapacitivePen", \
+  ENV{EVDEV_ABS_00}="0:23999:124", ENV{EVDEV_ABS_01}="0:33919:124", \
+  ENV{LIBINPUT_CALIBRATION_MATRIX}="0 1 0 -1 0 1"
+# IMPORT is evaluated before assignments on the same rule. Apply the axis
+# properties in a separate rule, after they have been assigned above.
+ACTION!="remove", SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="NVTCapacitivePen", \
+  IMPORT{builtin}="keyboard"

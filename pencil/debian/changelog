@@ -1,0 +1,7 @@
+iceland-pencild (0.1.0-1) unstable; urgency=medium
+
+  * Package the event-driven BLE and NT36536 pen bridge.
+  * Include pressure and side-button forwarding, firmware reset handling,
+    and the digitizer coordinate and libinput configuration.
+
+ -- Iceland mainline <dev@localhost>  Sat, 07 Nov 2026 12:00:00 +0000

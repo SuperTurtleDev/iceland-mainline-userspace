@@ -1,0 +1,5 @@
+*.o
+/iceland-pencild
+/nvtctl
+/tests/protocol
+/tests/capture

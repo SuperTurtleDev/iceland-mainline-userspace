@@ -1,0 +1,15 @@
+Source: iceland-pencild
+Section: utils
+Priority: optional
+Maintainer: Iceland mainline <dev@localhost>
+Build-Depends: debhelper-compat (= 13), pkg-config, libglib2.0-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: iceland-pencild
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}, bluez, libinput10, udev
+Description: OPPO Pencil BLE and NT36536 touchscreen bridge for Iceland
+ Forward pencil timing, pressure and button data between BlueZ and the
+ NT36536 kernel control interface. Install the systemd service and the
+ libinput and udev configuration for the integrated pen digitizer.

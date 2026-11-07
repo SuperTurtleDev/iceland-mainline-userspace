@@ -1,0 +1,23 @@
+[Unit]
+Description=Iceland OPPO Pencil BLE and touchscreen bridge
+Wants=bluetooth.service
+After=bluetooth.service systemd-modules-load.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/iceland-pencild
+Restart=on-failure
+RestartSec=3
+CapabilityBoundingSet=CAP_SYS_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+
+[Install]
+WantedBy=multi-user.target

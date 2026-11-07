@@ -1,0 +1,8 @@
+# The integrated NT36536 digitizer reports coordinates through evdev, but the
+# older driver omits BTN_STYLUS. libinput otherwise rejects it. Adding the
+# capability does not synthesize side-button events. Native axis ranges,
+# resolution and display orientation are set by 61-iceland-pencil.rules.
+[Iceland integrated Novatek pen]
+MatchName=NVTCapacitivePen
+MatchUdevType=tablet
+AttrEventCode=+BTN_STYLUS
