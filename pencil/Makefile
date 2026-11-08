@@ -3,8 +3,8 @@ PREFIX ?= /usr
 CFLAGS ?= -O2 -g
 CFLAGS += -Wall -Wextra -Werror
 
-GIO_CFLAGS := $(shell pkg-config --cflags gio-2.0 gio-unix-2.0)
-GIO_LIBS := $(shell pkg-config --libs gio-2.0 gio-unix-2.0)
+GIO_CFLAGS := $(shell pkg-config --cflags gio-2.0 gio-unix-2.0 libdrm)
+GIO_LIBS := $(shell pkg-config --libs gio-2.0 gio-unix-2.0 libdrm)
 
 all: nvtctl iceland-pencild
 
@@ -21,8 +21,12 @@ tests/protocol: tests/protocol.c pen-protocol.c pen-protocol.h nt36536.h
 tests/capture: tests/capture.c nvt-netlink.c nvt-netlink.h nt36536.h
 	$(CC) $(CFLAGS) -I. tests/capture.c nvt-netlink.c -o $@
 
-check: tests/protocol
+tests/status: tests/status.c iceland-pencild.c pen-protocol.c nvt-netlink.c pen-protocol.h nvt-netlink.h nt36536.h
+	$(CC) $(CFLAGS) $(GIO_CFLAGS) -I. tests/status.c pen-protocol.c nvt-netlink.c $(GIO_LIBS) -o $@
+
+check: tests/protocol tests/status
 	./tests/protocol
+	./tests/status
 
 install: all
 	install -Dm755 iceland-pencild $(DESTDIR)$(PREFIX)/libexec/iceland-pencild
@@ -32,6 +36,6 @@ install: all
 	install -Dm644 61-iceland-pencil.rules $(DESTDIR)$(PREFIX)/lib/udev/rules.d/61-iceland-pencil.rules
 
 clean:
-	rm -f nvtctl iceland-pencild *.o tests/protocol tests/capture
+	rm -f nvtctl iceland-pencild *.o tests/protocol tests/capture tests/status
 
 .PHONY: all clean check install

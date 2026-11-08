@@ -16,7 +16,7 @@ podman run --rm --platform linux/arm64 \
 export DEBIAN_FRONTEND=noninteractive LC_ALL=C
 apt-get update
 apt-get install -y --no-install-recommends build-essential debhelper \
-    pkg-config libglib2.0-dev
+    pkg-config libglib2.0-dev libdrm-dev
 test "$(dpkg --print-architecture)" = arm64
 rm -rf /build/source
 mkdir -p /build/source

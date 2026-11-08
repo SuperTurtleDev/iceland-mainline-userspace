@@ -7,6 +7,19 @@
 
 int main(void)
 {
+	/* Captured periodic status and the distinct OEM feedback command. */
+	uint8_t enabled = 0xff;
+	assert(pen_status((uint8_t[]){0x2c,0x90,1,1,1}, 5, &enabled) == 1 && enabled == 1);
+	assert(pen_status((uint8_t[]){0x2c,0x90,1,1,0}, 5, &enabled) == 1 && enabled == 0);
+	assert(pen_status((uint8_t[]){0x2c,0x90,1,1}, 4, &enabled) == -1);
+	assert(pen_status((uint8_t[]){0x2c,0x90,1,1,2}, 5, &enabled) == -1);
+	assert(pen_status((uint8_t[]){0x2c,0x90,1,1,0,0}, 6, &enabled) == -1);
+	assert(pen_status((uint8_t[]){0x2c,0x94,2,0,3}, 5, &enabled) == 0);
+	assert(pen_status(NULL, 0, &enabled) == 0);
+	assert(pen_status_rate_supported(30) && pen_status_rate_supported(60));
+	assert(pen_status_rate_supported(120));
+	assert(!pen_status_rate_supported(90) && !pen_status_rate_supported(144));
+	assert(!pen_status_rate_supported(0));
 	/* Actual Iceland IC report captured over the new Netlink interface. */
 	const uint8_t timing[] = {0xf0,6,0,20,0x0b,0x14,0x78,0x35,0x31,0x0f,0x2f,0x0f,
 		0xaa,0x0f,0x2f,0x0f,0x05,0x1e,0x70,0x0f,0x2f,0x0f,0x0f,0x0c};

@@ -4,6 +4,8 @@
 #include "nt36536.h"
 
 #include <errno.h>
+#include <fcntl.h>
+#include <glob.h>
 #include <gio/gio.h>
 #include <glib-unix.h>
 #include <linux/netlink.h>
@@ -11,6 +13,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <xf86drmMode.h>
 
 #define BLUEZ "org.bluez"
 #define DEVICE "org.bluez.Device1"
@@ -18,6 +21,7 @@
 #define UUID_CONTROL "0783b03e-8535-b5a0-7140-a304d2495cbb"
 #define UUID_PDU "0783b03e-8535-b5a0-7140-a304d2495cbc"
 #define UUID_BUTTON "180938ac-2a69-11ec-8d3d-0242ac130003"
+#define UUID_STATUS "18093046-2a69-11ec-8d3d-0242ac130003"
 
 struct ble_request;
 
@@ -26,11 +30,14 @@ struct app {
 	GDBusConnection *bus;
 	GDBusObjectManager *objects;
 	struct nvt_link commands, events;
-	char *address, *device, *control, *pdu, *button;
+	char *address, *device, *control, *pdu, *button, *status;
 	guint configure_source;
+	guint status_source;
 	int uevent_fd;
 	gboolean connecting, subscribing, subscribed, initialized, pressure_known;
 	gboolean button_subscribed;
+	gboolean status_subscribed;
+	int pen_enabled;
 	gboolean pressure;
 	unsigned int pressure_packets;
 	unsigned long uplinks, downlinks, unknown;
@@ -133,9 +140,9 @@ static void write_next(struct app *app)
 	dump(request->pdu ? "ble-pdu-write" : "ble-write", data, len);
 }
 
-static void ble_write(struct app *app, const uint8_t *data, size_t len, gboolean pdu)
+static void ble_write_path(struct app *app, const char *path,
+			   const uint8_t *data, size_t len, gboolean pdu)
 {
-	const char *path = pdu ? app->pdu : app->control;
 	if (!app->subscribed || !path)
 		return;
 	/* ATT allows one outstanding request; advance only on WriteValue completion. */
@@ -150,6 +157,96 @@ static void ble_write(struct app *app, const uint8_t *data, size_t len, gboolean
 	request->pdu = pdu;
 	g_queue_push_tail(&app->writes, request);
 	write_next(app);
+}
+
+static void ble_write(struct app *app, const uint8_t *data, size_t len, gboolean pdu)
+{
+	ble_write_path(app, pdu ? app->pdu : app->control, data, len, pdu);
+}
+
+/* Read the active internal panel mode without taking DRM master or modesetting. */
+static unsigned int panel_refresh(void)
+{
+	glob_t cards = {0};
+	unsigned int hz = 0;
+	if (glob("/dev/dri/card[0-9]*", 0, NULL, &cards)) {
+		globfree(&cards);
+		return 0;
+	}
+	for (size_t i = 0; i < cards.gl_pathc && !hz; i++) {
+		int fd = open(cards.gl_pathv[i], O_RDONLY | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+		drmModeRes *res = drmModeGetResources(fd);
+		for (int j = 0; res && j < res->count_connectors && !hz; j++) {
+			drmModeConnector *con = drmModeGetConnectorCurrent(fd, res->connectors[j]);
+			if (!con)
+				continue;
+			if (con->connector_type == DRM_MODE_CONNECTOR_DSI && con->encoder_id) {
+				drmModeEncoder *enc = drmModeGetEncoder(fd, con->encoder_id);
+				drmModeCrtc *crtc = enc && enc->crtc_id ? drmModeGetCrtc(fd, enc->crtc_id) : NULL;
+				if (crtc && crtc->mode_valid) {
+					const drmModeModeInfo *m = &crtc->mode;
+					uint64_t total = (uint64_t)m->htotal * m->vtotal;
+					if (total)
+						hz = ((uint64_t)m->clock * 1000 + total / 2) / total;
+				}
+				drmModeFreeCrtc(crtc);
+				drmModeFreeEncoder(enc);
+			}
+			drmModeFreeConnector(con);
+		}
+		drmModeFreeResources(res);
+		close(fd);
+	}
+	globfree(&cards);
+	return hz;
+}
+
+static void reset_status(struct app *app)
+{
+	if (app->status_source)
+		g_source_remove(app->status_source);
+	app->status_source = 0;
+	app->pen_enabled = -1;
+	app->status_subscribed = FALSE;
+}
+
+static gboolean acknowledge_enabled(gpointer user_data)
+{
+	struct app *app = user_data;
+	app->status_source = 0;
+	if (!app->status_subscribed || app->pen_enabled != 1)
+		return G_SOURCE_REMOVE;
+	unsigned int hz = panel_refresh();
+	if (pen_status_rate_supported(hz)) {
+		const uint8_t enabled[] = {0x2c, 0x90, 1, 1, 1};
+		ble_write_path(app, app->status, enabled, sizeof(enabled), FALSE);
+	}
+	g_debug("pencil enable response: panel=%u Hz, allowed=%d",
+		hz, pen_status_rate_supported(hz));
+	return G_SOURCE_REMOVE;
+}
+
+static void status_notification(struct app *app, const uint8_t *data, size_t len)
+{
+	uint8_t enabled;
+	dump("ble-status", data, len);
+	if (pen_status(data, len, &enabled) != 1)
+		return;
+	if (app->pen_enabled != enabled)
+		g_message("pencil reported enable status=%u", enabled);
+	app->pen_enabled = enabled;
+	if (enabled) {
+		if (!app->status_source)
+			app->status_source = g_timeout_add(200, acknowledge_enabled, app);
+	} else {
+		if (app->status_source)
+			g_source_remove(app->status_source);
+		app->status_source = 0;
+		const uint8_t disabled[] = {0x2c, 0x90, 1, 1, 0};
+		ble_write_path(app, app->status, disabled, sizeof(disabled), FALSE);
+	}
 }
 
 static void initialize(struct app *app)
@@ -286,6 +383,23 @@ static void button_notify_done(GObject *object, GAsyncResult *result, gpointer u
 		app->initialized = FALSE;
 		g_message("BLE side-button notification subscription ready");
 	}
+	schedule_configure(app);
+}
+
+static void status_notify_done(GObject *object, GAsyncResult *result, gpointer user_data)
+{
+	struct app *app = user_data;
+	GError *error = NULL;
+	GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(object), result, &error);
+	app->subscribing = FALSE;
+	if (!reply) {
+		g_warning("BLE status StartNotify: %s", error->message);
+		g_error_free(error);
+	} else {
+		g_variant_unref(reply);
+		app->status_subscribed = TRUE;
+		g_message("BLE enable-status notification subscription ready");
+	}
 	initialize(app);
 }
 
@@ -402,6 +516,7 @@ static void configure(struct app *app)
 	app->device = g_strdup(g_dbus_proxy_get_object_path(device));
 	if (!property_bool(device, "Connected")) {
 		release_pressure(app);
+		reset_status(app);
 		app->initialized = app->subscribed = app->pressure_known = FALSE;
 		app->button_subscribed = FALSE;
 		g_queue_clear_full(&app->writes, write_free);
@@ -418,6 +533,7 @@ static void configure(struct app *app)
 	g_clear_pointer(&app->control, g_free);
 	g_clear_pointer(&app->pdu, g_free);
 	g_clear_pointer(&app->button, g_free);
+	g_clear_pointer(&app->status, g_free);
 	for (GList *l = objects; l; l = l->next) {
 		const char *path = g_dbus_object_get_object_path(l->data);
 		if (!g_str_has_prefix(path, app->device))
@@ -432,6 +548,8 @@ static void configure(struct app *app)
 			app->pdu = g_strdup(path);
 		if (uuid && !g_ascii_strcasecmp(uuid, UUID_BUTTON))
 			app->button = g_strdup(path);
+		if (uuid && !g_ascii_strcasecmp(uuid, UUID_STATUS))
+			app->status = g_strdup(path);
 		g_free(uuid);
 		g_object_unref(iface);
 	}
@@ -444,6 +562,10 @@ static void configure(struct app *app)
 		app->subscribing = TRUE;
 		g_dbus_connection_call(app->bus, BLUEZ, app->button, GATT, "StartNotify", NULL,
 			NULL, G_DBUS_CALL_FLAGS_NONE, 5000, NULL, button_notify_done, app);
+	} else if (app->subscribed && app->status && !app->status_subscribed) {
+		app->subscribing = TRUE;
+		g_dbus_connection_call(app->bus, BLUEZ, app->status, GATT, "StartNotify", NULL,
+			NULL, G_DBUS_CALL_FLAGS_NONE, 5000, NULL, status_notify_done, app);
 	} else {
 		initialize(app);
 	}
@@ -465,6 +587,7 @@ static void properties_changed(GDBusObjectManagerClient *manager, GDBusObjectPro
 		if (app->device && !strcmp(path, app->device) && !property_bool(proxy, "Connected")) {
 			const uint8_t disconnected[] = {0x7f,0x40,0};
 			release_pressure(app);
+			reset_status(app);
 			if (app->initialized)
 				touch_write(app, disconnected, sizeof(disconnected));
 			app->initialized = app->subscribed = app->pressure_known = FALSE;
@@ -474,12 +597,16 @@ static void properties_changed(GDBusObjectManagerClient *manager, GDBusObjectPro
 		schedule_configure(app);
 	} else if (!strcmp(interface, GATT) &&
 		   ((app->control && !strcmp(path, app->control)) ||
-		    (app->button && !strcmp(path, app->button)))) {
+		    (app->button && !strcmp(path, app->button)) ||
+		    (app->status && !strcmp(path, app->status)))) {
 		GVariant *value = g_variant_lookup_value(changed, "Value", G_VARIANT_TYPE_BYTESTRING);
 		if (value) {
 			gsize len;
 			const uint8_t *data = g_variant_get_fixed_array(value, &len, 1);
-			if (app->button && !strcmp(path, app->button)) {
+			if (app->status && !strcmp(path, app->status)) {
+				if (app->status_subscribed)
+					status_notification(app, data, len);
+			} else if (app->button && !strcmp(path, app->button)) {
 				struct pen_command command;
 				dump("ble-button", data, len);
 				if (app->initialized && app->button_subscribed &&
@@ -508,10 +635,13 @@ static void object_removed(GDBusObjectManager *manager, GDBusObject *object, gpo
 	if ((app->device && !strcmp(path, app->device)) ||
 	    (app->control && !strcmp(path, app->control))) {
 		release_pressure(app);
+		reset_status(app);
 		app->initialized = app->subscribed = app->pressure_known = FALSE;
 		app->button_subscribed = FALSE;
 		g_queue_clear_full(&app->writes, write_free);
 	}
+	if (app->status && !strcmp(path, app->status))
+		reset_status(app);
 	schedule_configure(app);
 }
 
@@ -555,7 +685,8 @@ static gboolean quit(gpointer user_data)
 
 int main(int argc, char **argv)
 {
-	struct app app = { .commands.fd = -1, .events.fd = -1, .uevent_fd = -1 };
+	struct app app = { .commands.fd = -1, .events.fd = -1, .uevent_fd = -1,
+		.pen_enabled = -1 };
 	GError *error = NULL;
 	gint duration = 0;
 	gboolean debug = FALSE;
@@ -606,6 +737,7 @@ int main(int argc, char **argv)
 		g_timeout_add_seconds(duration, quit, &app);
 	configure(&app);
 	g_main_loop_run(app.loop);
+	reset_status(&app);
 	g_message("bridge stopped: uplinks=%lu downlinks=%lu unmapped=%lu", app.uplinks, app.downlinks, app.unknown);
 	if (app.initialized) {
 		const uint8_t disconnected[] = {0x7f,0x40,0};

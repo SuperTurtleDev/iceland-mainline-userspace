@@ -17,5 +17,8 @@ int pen_uplink(const uint8_t *frame, size_t len, uint8_t *packet, size_t capacit
 int pen_downlink(const uint8_t *packet, size_t len, struct pen_command *command);
 /* OEM click characteristic: physical down/up, not desktop gesture actions. */
 int pen_button(const uint8_t *packet, size_t len, struct pen_command *command);
+/* OEM interface characteristic: enable status, not a side-button bitmap. */
+int pen_status(const uint8_t *packet, size_t len, uint8_t *enabled);
+int pen_status_rate_supported(unsigned int hz);
 
 #endif

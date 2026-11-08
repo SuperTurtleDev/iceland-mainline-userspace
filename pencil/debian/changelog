@@ -1,3 +1,10 @@
+iceland-pencild (0.1.0-2) unstable; urgency=medium
+
+  * Handle the OEM periodic pencil enable-status GATT notifications and replies.
+  * Read the active DSI refresh rate for the OEM 90/144 Hz exclusion.
+
+ -- Iceland mainline <dev@localhost>  Sat, 07 Nov 2026 19:00:00 +0000
+
 iceland-pencild (0.1.0-1) unstable; urgency=medium
 
   * Package the event-driven BLE and NT36536 pen bridge.

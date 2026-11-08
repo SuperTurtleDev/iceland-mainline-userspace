@@ -37,6 +37,18 @@ replays pen setup and queries geometry again. This covers panel blank/unblank,
 greeter-to-session modesets, system resume and watchdog firmware recovery;
 configuration starts when the IC accepts commands, without a fixed delay.
 
+The separate `18093046-2a69-11ec-8d3d-0242ac130003` GATT characteristic
+reports `2c 90 01 01 <enabled>`. Following OEM IPeManager's
+`btadsorb/ble/s0.java` (`handlePencilStatusResult`, `c0`) and `g3/j.java`,
+the bridge responds with disabled immediately or enabled after a one-shot
+200 ms delay. Before enabling it reads the internal DSI panel's current mode
+through libdrm; OEM excludes 90 and 144 Hz. An inactive/unreadable panel does
+not receive an enable response. A disabled notification or disconnect cancels
+the pending timer. Repeated status packets never create parallel timers.
+This status is pencil enable state, not side-button state; it does not inject
+button releases. `2c 94 02 ...` configures writing feedback and is a different
+message. No status polling, display modesetting or SPEED forwarding is added.
+
 ## Debian package
 
 Run `./pencil/build.sh` from the userspace repository to build the ARM64

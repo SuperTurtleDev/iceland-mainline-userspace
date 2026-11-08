@@ -2,7 +2,7 @@ Source: iceland-pencild
 Section: utils
 Priority: optional
 Maintainer: Iceland mainline <dev@localhost>
-Build-Depends: debhelper-compat (= 13), pkg-config, libglib2.0-dev
+Build-Depends: debhelper-compat (= 13), pkg-config, libglib2.0-dev, libdrm-dev
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 

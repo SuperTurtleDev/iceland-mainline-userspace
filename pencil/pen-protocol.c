@@ -3,6 +3,23 @@
 #include "nt36536.h"
 #include <string.h>
 
+int pen_status(const uint8_t *p, size_t len, uint8_t *enabled)
+{
+	const uint8_t header[] = {0x2c, 0x90, 1, 1};
+	if (len < sizeof(header) || memcmp(p, header, sizeof(header)))
+		return 0;
+	if (len != 5 || p[4] > 1)
+		return -1;
+	*enabled = p[4];
+	return 1;
+}
+
+int pen_status_rate_supported(unsigned int hz)
+{
+	/* IPeManager s0.c0()/handlePencilStatusResult excludes these two modes. */
+	return hz && hz != 90 && hz != 144;
+}
+
 int pen_button(const uint8_t *p, size_t len, struct pen_command *c)
 {
 	memset(c, 0, sizeof(*c));
